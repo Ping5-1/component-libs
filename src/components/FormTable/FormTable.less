@@ -1,0 +1,175 @@
+/* 涉及到的外部变量(在@/assets/styles/variables.less中):
+   @font-default, @font-danger
+   @table-bg, @table-thead-color, @table-thead-bg, @table-border, @table-tr-odd, @table-tr-even, @tr-hover
+   @th-font-size, @td-font-size, @tr-space, @td-space
+   @padding-input
+*/
+.form-table {
+    /* 变量命名 */
+    @opera-num: 2; //操作列的列数
+    @padding-input: 5px 15px; //输入框的间距
+
+    border-collapse: collapse;
+    width: 100%;
+    color: @font-default;
+    background-color: @table-bg;
+
+    /* 空白行 */
+    .tr-empty .tr-empty-panel {
+        text-align: center;
+        padding: 20px;
+    }
+
+    /* 文本对齐方式 */
+    &.td-center {
+        tbody tr td {
+            text-align: center;
+        }
+    }
+
+    &.td-left {
+        tbody tr td {
+            text-align: left;
+        }
+    }
+
+    &.td-right {
+        tbody tr td {
+            text-align: right;
+        }
+    }
+
+    /* 表头样式 */
+    thead {
+        color: @table-thead-color;
+        background-color: @table-thead-bg;
+        font-size: @th-font-size;
+    }
+
+    /* 单元格间距 */
+    thead tr th {
+        padding: @tr-space;
+
+        td {
+            padding: @padding-input;
+        }
+    }
+
+    tbody tr td .form-table-cell {
+        display: inline-block;
+        box-sizing: border-box;
+        position: relative;
+        vertical-align: middle;
+        width: 100%;
+        padding: @td-space;
+    }
+
+    /* 绘制边框 */
+    thead tr,
+    tbody tr {
+        border-top: @table-border;
+        border-right: @table-border;
+    }
+
+    thead tr th,
+    tbody tr td {
+        &:not(:last-child) {
+            border-right: @table-border;
+        }
+    }
+
+    thead tr th:first-child,
+    tbody tr td:first-child {
+        border-left: @table-border;
+    }
+
+    tbody tr:last-child {
+        border-bottom: @table-border;
+    }
+
+    &.is-striped {
+        tr {
+            background-color: @table-tr-odd;
+        }
+
+        // 偶数行
+        tr:nth-child(even) {
+            background-color: @table-tr-even;
+        }
+    }
+
+    tbody {
+        font-size: @td-font-size;
+
+        // 鼠标悬浮的颜色
+        tr:hover {
+            background-color: @tr-hover;
+        }
+    }
+
+    .opera-td {
+        position: relative;
+        min-width: 80px;
+
+        .form-table-cell {
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: grid;
+            grid-template-columns: repeat(@opera-num, calc(100% / @opera-num));
+            justify-items: center;
+            align-items: center;
+            padding: 0;
+
+            .opera-box {
+                width: 100%;
+                height: 100%;
+                padding: @td-space;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+
+                /deep/.el-button {
+                    font-size: @td-font-size;
+                    border-color: transparent;
+                    background: unset;
+
+                    &:hover {
+                        background-color: inherit;
+                    }
+                }
+            }
+
+            .opera-box+.opera-box {
+                border-left: @table-border;
+            }
+        }
+    }
+
+    /deep/input {
+        text-align: left;
+        transition: all 0.5s;
+        font-size: @td-font-size;
+        padding: @padding-input;
+    }
+
+    /deep/input[readonly="readonly"] {
+        border-color: transparent;
+        background: unset;
+        cursor: default;
+        text-align: center;
+    }
+
+    /deep/.el-input.is-error {
+        .el-input__inner {
+            border-color: @font-danger;
+        }
+    }
+}
+
+/deep/.hidden {
+    display: none;
+}

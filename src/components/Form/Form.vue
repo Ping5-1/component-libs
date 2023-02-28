@@ -1,278 +1,277 @@
-<!--
- * @Author: ypW
- * @objectDescription: 视频资源管理
- * @Date: 2022-08-31 17:43:38
- * @LastEditors: ypW
- * @LastEditTime: 2022-09-08 16:48:58
- * @FilePath: \system-video\src\views\components\Form\Form.vue
- * @Version: 1.0.0
--->
+<!-- 表单项可带组合选项的表单 -->
 <template>
   <el-form
-    ref="form"
-    :class="formClassName"
+    ref="normal-form"
+    :class="[formClassName,!formInline?`grid-cols-${cols}`:'',formReadonly?'form-readonly':'']"
     :model="formData"
     :rules="rules"
     :label-position="labelPosition"
+    :label-width="labelWidth"
     class="v-form"
+    :inline="formInline"
+    :disabled="formReadonly"
   >
-    <el-form-item
-      v-for="(item, index) in props"
-      :key="index"
-      :prop="item.prop"
-      :label="item.label"
-      :rules="itemRule(item)"
-      :class="{'in-new-line':item.inNewLine}"
-    >
-      <!-- 普通输入框 -->
-      <el-input
-        v-if="item.type==='input'||!item.type"
-        v-model="formData[item.prop]"
-        :type="item.inputType"
-        :placeholder="'请输入'+item.label"
-        :disable="item.disable?item.disable:false"
-        :readonly="item.readonly?item.readonly:false"
-        autocomplete="off"
-      />
-      <!-- 树形选择 -->
-      <treeselect
-        v-if="item.type==='treeselect'"
-        v-model="formData[item.prop]"
-        :value="formData[item.prop]"
-        :options="item.tree"
-        :placeholder="'请选择'+item.label"
-        :normalizer="(val)=>treeNormalizer(val,item.treeNormalizer)"
-      />
-      <!-- 下拉选择 -->
-      <el-select
-        v-if="item.type==='select'"
-        v-model="formData[item.prop]"
-        clearable
-        :disabled="item.disabled"
-        :placeholder="'请选择'+item.label"
+    <template v-for="(item,index) in formProps">
+      <div
+        v-if="item.title"
+        :key="'title'+index"
+        class="form-title"
       >
-        <el-option
-          v-for="i in item.options"
-          :key="i.value"
-          :label="i.label"
-          :value="i.value"
-          :disabled="i.disabled"
-        />
-      </el-select>
-      <!-- 多选组 -->
-      <VCheckGroup
-        v-if="item.type==='checkgroup'"
-        :options="item.options"
-        :name="item.prop"
-        @getChecked="setItemValueOfCheck(arguments,item)"
-      />
-      <!-- 时间选择器 -->
-      <el-date-picker
-        v-if="item.type==='datepicker'"
-        v-model="formData[item.prop]"
-        type="date"
-        :placeholder="'请选择'+item.label"
-        format="yyyy-MM-dd"
-        value-format="yyyy-MM-dd"
-      />
-    </el-form-item>
+        {{ item.title }}
+      </div>
+      <el-form-item
+        v-else-if="!item.hidden"
+        :key="'item'+index"
+        :prop="item.prop"
+        :label="item.label"
+        :rules="setItemRule(item)"
+        :show-message="item.showMsg"
+        :class="[{'in-new-line':item.inNewLine},{'full-line':item.full}]"
+      >
+        <!-- 自定义插槽 -->
+        <template v-if="item.slot">
+          <slot
+            :name="item.slot"
+            :item="formData[item.prop]"
+          />
+        </template>
+        <!-- 单个表单项 -->
+        <template v-else-if="!item.props">
+          <form-single-item
+            v-if="!item.hidden"
+            :item="item"
+            @item-options="reQueryItemOptions(item);emitFormItemOptionsEmpty(item)"
+          />
+        </template>
+        <!-- 组合型 -->
+        <div
+          v-else
+          class="grid"
+        >
+          <el-form-item
+            v-for="(it, i) in item.props"
+            :key="i"
+            :prop="it.prop"
+            :class="{'hidden':it.hidden}"
+            :rules="setItemRule(it)"
+          >
+            <form-single-item
+              v-if="!it.hidden&&!it.slot"
+              :item="it"
+              @item-options="reQueryItemOptions"
+            />
+            <template v-if="!it.hidden&&it.slot">
+              <slot :name="it.slot" />
+            </template>
+          </el-form-item>
+        </div>
+      </el-form-item>
+    </template>
   </el-form>
 </template>
 
 <script>
-import Treeselect from '@riophae/vue-treeselect';
-import '@riophae/vue-treeselect/dist/vue-treeselect.css';
-import VCheckGroup from '../CheckGroup/CheckGroup';
+import mixin from './modules/mixin';
 
 export default {
   name: 'NormalForm',
   components: {
-    Treeselect,
-    VCheckGroup
+    FormSingleItem: ()=>import('./modules/FormItem.vue'),
+  },
+  mixins: [mixin],
+  provide() {
+    return {
+      // 传递给form-item
+      form: this
+    };
+  },
+  model: {
+    prop: 'model',
+    event: 'newForm'
   },
   props: {
     // form 表单的值
     model: {
       type: Object,
-      default: ()=>{}
+      default: ()=>{},
+      required: true
     },
     // form-item配置
-    props: {
+    prop: {
       type: Array,
-      default: ()=>[]
+      default: ()=>[],
+      required: true
     },
     // 校验规则
     rules: {
       type: Object,
       default: ()=>{}
     },
-    // label所在位置，top、left、top
+    // label所在位置，top、left、right
     labelPosition: {
       type: String,
-      default: 'top'
+      default: 'right'
+    },
+    // label宽度
+    labelWidth: {
+      type: String,
+      default: 'auto'
     },
     // form表单类名
     formClassName: {
       type: String,
       default: ''
     },
+    // 列数
+    cols: {
+      type: Number,
+      default: 1
+    },
+    // 表单是否横向排布
+    formInline: {
+      type: Boolean,
+      default: false
+    },
+    // 表单是否只读
+    formReadonly: {
+      type: Boolean,
+      default: false
+    },
+    // 不使用默认placeholder
+    noPlaceHolder: {
+      type: Boolean,
+      default: false
+    },
+    // 深色主题
+    isDarkTheme: {
+      type: Boolean,
+      default: true
+    }
   },
   data() {
     return {
-      // 表单数据
-      formData: {},
+      formData: {},// 表单数据
+      formProps: [],// 表单配置
     };
   },
+  watch: {
+    formData: {
+      handler(val) { 
+        // 联动规则
+        this.formProps.forEach((item) =>{
+          if (item.link) {
+            this.handleHidden(item.prop,item.link,item.linkFn);
+          }
+          if(item.props) {
+            item.props.forEach((it)=>{
+              if(it.link) {
+                this.handleHidden(it.prop,it.link,it.linkFn);
+              }
+            });
+          }
+        });
+        this.$emit('newForm', val);
+      },
+      deep: true
+    },
+  },
   mounted() {
-    this.initForm();
+    this.$nextTick(()=>{
+      this.initForm();
+    });
   },
   methods: {
-    /**
-     * @description: 表单初始化
-     */    
+    // 表单初始化
     initForm() {
-      this.formData = Object.assign({},this.model);// 初始化赋值
-      this.$refs.form.resetFields();// 初始化时不进行校验
-      this.props.forEach((item,index)=> {
-        if(item.type === 'select') {
-          this.handleSelectFn(item,index);
+      this.formData = Object.assign({},this.model);// 表单初始化赋值
+      this.formProps = Array.from(this.prop);// 表单配置初始化赋值
+      this.resetFields();// 初始化时不进行校验
+      // 添加下拉框选项
+      this.addSelectFn(this.formProps);
+      this.formProps.forEach((item)=> {
+        if(item.props) {
+          this.addSelectFn(item.props);
         }
       });
     },
-    /**
-     * @description: 处理item的rule默认规则，补充校验提示和触发条件
-     * @param {*} item form中的item
-     * @return {*} 添加了默认规则的新的rule
-     */    
-    itemRule(item) {
-      item.rules = item.rules || {};
-      // 有rule或没rule但required
-      if( !_.isEmpty(item.rules) || (_.isEmpty(item.rules) && item.required === true)) {
-        // 设置message
-        if(!item.rules.message) {
-          if(!item.type || item.type === 'input')
-            item.rules['message'] = '请输入' + item.label;
-          else
-            item.rules['message'] = '请选择' + item.label;
-        }
-        // 设置校验触发动作
-        if(!item.rules.trigger) {
-          if(!item.type || item.type === 'input')
-            item.rules['trigger'] = 'blur';
-          else
-            item.rules['trigger'] = 'change';
-        }
-        item.rules['required'] = true;// 设置required
-        return item.rules;
-      }
-      return null;
+    // 表单校验
+    validate() {
+      let isValidate = false;
+      this.$refs['normal-form'].validate((valid) => {
+        isValidate = valid;
+      });
+      return isValidate;
+    },
+    validateField(field) {
+      this.$refs['normal-form'].validateField(field);
+    },
+    // 重置表单校验
+    resetFields() {
+      this.$refs['normal-form'].resetFields();
+    },
+    // 重置到初始状态
+    clickReset() {
+      this.$refs['normal-form'].resetFields();
+      this.$emit('reset');
+      // if(this.searchAfterReset) this.search();// 重置时搜索
+    },
+    // 重置并清空初始值
+    reset() {
+      this.$refs['normal-form'].resetFields();
+      this.formData = Object.assign({},this.resetObjectValue(this.formData));
     },
     /**
-     * @description: 处理下拉选项异步的情况
-     * @param {*} item 下拉选项配置
-     * @param {*} index 下拉选项所在的下标
+     * @description: 控制联动项的显隐
+     * @param {*} item 联动项
      */    
-    handleSelectFn(item,index) {
-      if(!item.optionsFn)return;
-      
-      // optionsFn直接返回下拉数组
-      if(Array.isArray(item.optionsFn)) {
-        this.$set(item, 'options', item.optionsFn);
-        return;
-
+    handleHidden(prop,link,linkFn) {
+      if(link && typeof linkFn === 'function') {
+        const hidden = linkFn(this.formData[prop]);
+        link.forEach((it,j)=>{
+          // this.handleItemChange(it,{hidden: hidden,required: !hidden});
+          this.handleItemChange(it,hidden[j]);
+        });
       }
-      // optionsFn返回一个promise
-      else if(typeof item.optionsFn === 'object') {
-        (async ()=>{
-          await item.optionsFn.then((result)=>{
-            this.$set(item, 'options', result);
-          });
-        })();
-        return;
-
+    },
+    /**
+     * @description:  设置form项的显示隐藏，并清除该项的required
+     * @param {Number} propName 表单项的prop
+     * @param {Boolean} hidden 是否隐藏,true为隐藏
+     */ 
+    hiddenItem(propName,hidden) {
+      this.handleItemChange(propName,{hidden: hidden,required: !hidden});
+    },
+    /**
+     * @description: 设置 forn项目的相关属性
+     * @param {*} propName 表单项的prop
+     * @param {Object} attrs 属性设置
+     */    
+    handleItemChange(propName,attrs) {
+      let [itemIndex,propIndex] = [-1,-1];
+      if(Array.isArray(propName)) {
+        [itemIndex,propIndex] = propName;
       }
       else{
-        console.error('请返回正确的optionsFn类型:' + item.prop);
+        [itemIndex,propIndex] = this.getFormItemIndex(propName);
+      }
+      // 设置多余属性
+      if(attrs) {
+        let keys = Object.keys(attrs);
+        keys.forEach((key)=>{
+          if(propIndex === -1) {
+            this.$set(this.formProps[itemIndex],key,attrs[key]);
+          }
+          else {
+            this.$set(this.formProps[itemIndex].props[propIndex],key,attrs[key]);
+          }
+        });
+        this.formProps = [...this.formProps];// 触发更新
       }
     },
-    /**
-     * @description: 获取多选值并绑定到form对应项中
-     * @param {*} values VCheckGroup中，多选选中的值
-     * @param {*} item form中的item
-     */    
-    setItemValueOfCheck(values,item) {
-      let checkedArr = values[0];
-      this.$set(this.formData,item.prop,checkedArr);
-    },
-    /**
-     * @description: 树形格式化处理
-     * @param {*} node 自带参数，树节点
-     * @param {*} normalizer item格式化规则，形如：{idName:'id',labelName:'label',childrenName:'children'}
-     * @return {*} 格式化规则
-     */    
-    treeNormalizer(node,normalizer) {
-      if(!normalizer) {
-        // 去掉children=[]的children属性
-        if(node.children && !node.children.length) {
-          delete node.children;
-        }
-        return {
-          id: node.id,
-          label: node.label,
-          children: node.children,
-        };
-      }
-      else{
-        if(node[normalizer.childrenName] && !node[normalizer.childrenName].length) {
-          delete node[normalizer.childrenName];
-        }
-        return {
-          id: node[normalizer.idName],
-          label: node[normalizer.labelName],
-          children: node[normalizer.childrenName],
-        };
-      }
-    },
+
   }
 };
 </script>
 <style lang='less' scoped>
-  /* 表单 */
-.v-form {
-  display: grid;
-  justify-content: space-evenly;
-
-  /* grid-template-columns: repeat(2,calc(50% - 10px));//默认两列 */
-  grid-gap: 0 20px;
-
-  .el-form-item {
-    position: relative;
-
-    &.in-new-line {
-      /* 从自动行，第一列开始，合并1行1列，以起到新行的作用 */
-      grid-area: auto / 1 / span 1 / auto;
-    }
-
-    .el-form-item__label {
-      width: 100%;
-      padding-right: 0;
-      text-align: left;
-    }
-
-    .el-form-item__content {
-      width: 100%;
-
-      .el-select,
-      .el-input {
-        width: 100%;
-      }
-    }
-
-    /deep/ .vue-treeselect__control {
-      input {
-        vertical-align: middle;
-      }
-    }
-  }
-}
+  @import "./Form.less";
 </style>
