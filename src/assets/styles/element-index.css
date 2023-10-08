@@ -2,7 +2,7 @@
 
 @font-face {
     font-family: element-icons;
-    src: url(fonts/element-icons.woff) format("woff"), url(fonts/element-icons.ttf) format("truetype");
+    src: url(element-ui/lib/theme-chalk/fonts/element-icons.woff) format("woff"), url(element-ui/lib/theme-chalk/fonts/element-icons.ttf) format("truetype");
     font-weight: 400;
     font-display: "auto";
     font-style: normal
@@ -2370,7 +2370,7 @@
     padding: 7px 15px
 }
 
-.el-radio-button:focus:not(.is-light-2:not(:active):not(.is-disabled) {
+.el-radio-button:focus:not(.is-focus):not(:active):not(.is-disabled) {
     -webkit-box-shadow: 0 0 2px 2px var(--color-primary);
     box-shadow: 0 0 2px 2px var(--color-primary)
 }
@@ -5396,7 +5396,7 @@
     margin-bottom: 0
 }
 
-.el-tabs--bottom.el-tabs--border-card .el-tabs__item.is-bottom:not(.is-light-1 {
+.el-tabs--bottom.el-tabs--border-card .el-tabs__item.is-bottom:not(.is-active) {
     border: 1px solid transparent
 }
 
@@ -15235,7 +15235,7 @@
     margin: 0
 }
 
-.el-radio:focus:not(.is-light-2:not(:active):not(.is-disabled) .el-radio__inner {
+.el-radio:focus:not(.is-focus):not(:active):not(.is-disabled) .el-radio__inner {
     -webkit-box-shadow: 0 0 2px 2px var(--color-primary);
     box-shadow: 0 0 2px 2px var(--color-primary)
 }
