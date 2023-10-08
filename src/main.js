@@ -6,7 +6,8 @@ import _ from 'lodash'; // lodash
 import '@/assets/icons'; // svg-icon
 import '@/assets/styles/index.less'; // global css
 import Element from 'element-ui';
-import 'element-ui/lib/theme-chalk/index.css';
+// import 'element-ui/lib/theme-chalk/index.css';
+import '@/assets/styles/element-index.css';
 
 // 全局方法挂载
 Vue.prototype._ = _;

@@ -1,25 +1,31 @@
 <template>
   <div
-    :style="{'height':tbHeight}"
+    :style="{'height':tbTotalMaxHeight?tbTotalMaxHeight:`calc(${tbHeight?tbHeight:tbMaxHeight} + 46px)`}"
     :class="['table-container',{'table-container-border':totalBorder}]"
   >
+  <div class="table-panel">
     <el-table
       ref="table"
-      v-loading="loading"
       size="small"
-      :data="tbData"
+      v-loading="loading"
       element-loading-spinner="el-icon-loading"
       element-loading-text="加载中"
+      :data="tbData"
       :stripe="stripe"
       :border="border"
-      highlight-current-row
-      :row-style="rowStyle"
+      :row-key="rowKey"
+      :current-row-key="currentRowKey"
+      :highlight-current-row="highlight"
+      :row-class-name="`tb-row ${rowClass}`"
       :default-sort="defaultSort"
       header-row-class-name="tableHeader"
+      :height="tbHeight"
+      :max-height="tbMaxHeight"
       @selection-change="handleSelectionChange"
+      @row-click="handleRowClick"
     >
       <!-- 扩展部分 -->
-      <el-table-column
+      <!-- <el-table-column
         v-if="hasExpand"
         type="expand"
         width="35"
@@ -29,6 +35,23 @@
             name="tableSlot"
             :row="scope.row"
           />
+        </template>
+      </el-table-column> -->
+        <!-- 常规表格列 -->
+      <el-table-column
+       v-if="hasRadio"
+        width="50"
+        class-name="radio-select"
+        label="选择"
+      >
+        <template slot-scope="scope">
+          <span @click.stop>
+          <el-radio 
+          :value="tbRadioValue" 
+          :label="rowKey?scope.row[rowKey]:scope.$index" 
+          @input.native.stop="radioChange(scope.row,scope.$index,rowKey)"
+          />
+          </span>
         </template>
       </el-table-column>
       <!-- 如果有多选框 -->
@@ -49,7 +72,7 @@
       />
       <!-- 常规表格列 -->
       <el-table-column
-        v-for="(item,index) in tbList"
+        v-for="(item,index) in column"
         :key="index"
         :prop="item.prop"
         :label="item.label"
@@ -59,14 +82,21 @@
         :class-name="item.className"
       >
         <template slot-scope="scope">
+          <span @click.stop  v-if="scope.row && item.slot">
           <slot
-            v-if="scope.row && item.slotName"
-            :name="item.slotName"
+            :name="item.slot"
             :row="scope.row"
           />
+          </span>
+           <span
+            v-else-if="item.type === 'fn' || item.fn"
+            :class="item.classFn && item.classFn(scope.row)"
+          >
+            {{ item.fn(scope.row) }}
+          </span>
           <div
-            v-if="!item.slotName"
-            :class="item.classMap?item.classMap[scope.row[item.prop]]:''"
+            v-else
+            :class="item.classFn && item.classFn(scope.row)"
           >
             {{ scope.row[item.prop] }}
           </div>
@@ -77,43 +107,49 @@
         v-if="actions.length"
         :align="'center'"
         label="操作"
-        :width="actions.length>3?auto:90*actions.length"
+        :fixed="operaFixed"
+        :width="actions.length>2?60*actions.length:'150px'"
       >
         <template slot-scope="scope">
-          <el-button
-            v-for="(action,index) in actions"
+          <template v-for="(action,index) in actions">
+            <el-button
             :key="index"
-            :type="action.type"
+            v-if="!(action.hiddenFn&&action.hiddenFn(scope.row))"
+            :type="action.type?action.type:'text'"
             :size="action.size?action.size:'mini'"
             :plain="action.isPlain"
             :icon="action.icon"
-            :class="{onlyIcon:!action.label}"
-            @click="handleBtn(action.click, scope )"
+            :class="[action.class,{'onlyIcon':!action.label}]"
+            @click.native.stop="handleBtn(action.click, scope )"
           >
             {{ action.label }}
           </el-button>
+          </template>
         </template>
       </el-table-column>
     </el-table>
+    </div>
     <!-- 页码 -->
-    <el-pagination
-      v-if="tbLength"
+    <template v-if="!hidePaginationWhenZero||hidePaginationWhenZero&&total">
+      <el-pagination
       ref="pagination"
+      :background="paginationBg"
       class="pagination"
-      :current-page="currentPage"
+      :current-page="pageInfo.current"
+      :page-size="pageInfo.size"
       :page-sizes="pageRange"
-      :page-size="pageSize"
+      :total="total"
       layout="total, sizes, prev, pager, next, jumper"
-      :total="tbLength"
       @size-change="handleSizeChange"
       @current-change="handleCurrentChange"
     />
+    </template>
   </div>
 </template>
 
 <script>
 export default {
-  name: 'Table',
+  name: 'VTable',
   props: {
     // 加载效果
     loading: {
@@ -121,7 +157,7 @@ export default {
       default: false
     },
     // 表头配置
-    tbList: { 
+    column: { 
       type: Array,
       default: () =>[] 
     },
@@ -130,50 +166,55 @@ export default {
       type: Array,
       default: () =>null 
     },
-    // 表格数据的总条数
-    tbLength: {
-      type: Number,
-      default: 0
-    },
     // 操作动作
     actions: { 
       type: Array,
       default: () =>[] 
     },
-    // 默认排序方式
-    defaultSort: {
-      type: Object,
-      default: () =>{}
-    }, 
-    // 是否有内置扩展
-    hasExpand: {
-      type: Boolean,
-      default: false
+    multipleSelection: { 
+      type: Array,
+      default: () =>[] 
     },
+    // 默认排序方式
+    defaultSort: Object,
     // 是否有多选框
     hasSelection: {
       type: Boolean,
       default: false
     }, 
+    // 是否有单选框
+    hasRadio:{
+      type: Boolean,
+      default: false
+    },
+    // 点击表格行时触发单选，需要设置行唯一标识rowKey
+    radioByRowClick:{
+      type: Boolean,
+      default: false
+    },
     // 是否有序号列
     hasIndex: {
       type: Boolean,
-      default: false
+      default: true
     },
     // 页码步幅
     pageRange: {
       type: Array,
       default: ()=> [10,20, 40, 80, 100]
     },
-    // 表格总的高度，不支持百分比
-    tbHeight: {
+    // 表格的高度(不包括分页栏)
+    tbHeight: [String , Number],
+    // 表格的最大高度（不包括分页栏）,合法的值为数字或者单位为 px 的高度。
+    tbMaxHeight: [String , Number],
+    // 表格的最大高度（包括分页栏）,合法的值为数字或者单位为 px 的高度。
+    tbTotalMaxHeight:{
+      type:[String , Number],
+      default:'100%'
+    },
+     // 行样式
+    rowClass: {
       type: String,
       default: ''
-    },
-    // 表格行的行内样式
-    rowStyle: {
-      type: Object,
-      default: ()=>{}
     },
     // 是否有斑马纹
     stripe: {
@@ -183,40 +224,108 @@ export default {
     // 表格外框
     totalBorder: {
       type: Boolean,
-      default: true
+      default: false
     },
     // 是否有竖方向的边框
     border: {
       type: Boolean,
       default: true
     },
+    // 高亮当前行
+    highlight:{
+      type: Boolean,
+      default: true
+    },
+    operaFixed:{
+      type: String,
+      default: 'right'
+    },
     // 列宽是否使用默认宽度150px，若使用请务必确保至少有一列宽度为auto
     useDefaultWd: {
       type: Boolean,
       default: false
-    }
+    },
+    // 行key
+    rowKey:{
+      type:[Function,String],
+      default:null
+    },
+    // 当前行的 key，只写属性
+    currentRowKey:{
+      type: [String,Number],
+      default: null
+    },
+    // 单选选中行的key值
+    currentRowKeyValue:{
+       type:[Number,String],
+      default:null
+    },
+    // 页码是否带背景色
+    paginationBg:{
+      type: Boolean,
+      default: true
+    },
+     // 表格数据的总条数
+    total: {
+      type: Number,
+      default: 0
+    },
+    // 是否页码总数为0隐藏
+    hidePaginationWhenZero: {
+      type: Boolean,
+      default: true
+    },
+    // 页码信息
+    pageInfo: {
+      type: Object,
+      default() {
+        return {
+          current: 1,
+          size: 10,
+        };
+      },
+    },
   },
   data() {
     return {
-      multipleSelection: null,// 多选的值，为row合集
-      pageSize: this.pageRange[0],// 默认每页大小
-      currentPage: 1// 默认当前页
+      tbRadioValue:null,//单选选中的值
     };
+  },
+  mounted(){
+    if(this.hasRadio&&this.currentRowKeyValue){
+      this.tbRadioValue=this.currentRowKeyValue;
+    }
   },
   methods: {
     // 多选变化，传递选中行的数据
     handleSelectionChange(val) {
-      this.multipleSelection = val;
+      this.$emit('update:multipleSelection', val);
+      this.$emit('selectChange', val);
+    },
+    // 行点击时触发
+    handleRowClick(row, column, event) {
+      if(this.radioByRowClick&&this.rowKey){
+        this.radioChange(row,null,this.rowKey);
+      }
+      this.$emit('row-click',row, column, event);
+    },
+    radioChange(row,index,rowKey){
+      if(rowKey)  this.tbRadioValue=row[rowKey];
+      else this.tbRadioValue=index;
+      this.$emit('update:currentRowKeyValue', this.tbRadioValue);
+      this.$emit('radio-click',{value:this.tbRadioValue,row:row,index:index});
+    },
+    // 清空单选
+    clearRadio(){
+      this.tbRadioValue=null;
     },
     // 表格序号列
     tableIndex(index) {
-      return (this.currentPage - 1) * this.pageSize + index + 1;
+      return (this.pageInfo.current - 1) * this.pageInfo.size + index + 1;
     },
     // 设置默认宽度
     setWidth(width) {
-      if(width) {
-        return width;        
-      }
+      if(width) return width;        
 
       if(!this.useDefaultWd) return 'auto';
 
@@ -243,7 +352,7 @@ export default {
     // 重置页码当前页和每页数量
     reSetPagination() {
       this.currentPage = 1;
-      this.pageSize = this.pageRange[0];
+      this.size = this.pageRange[0];
     },
     // 重置搜索时，当前页为1
     reSetCurrentPage() {
@@ -251,94 +360,105 @@ export default {
     },
     // 处理每页数量变化
     handleSizeChange(val) {
-      this.currentPage = 1;// 每页数量发生变化，当前页应置为首页
-      this.pageSize = val;
-      this.$emit('pagination-change', this.pageSize,  this.currentPage );
+      let pageInfo = {
+        current: 1,
+        size: val,
+      };
+      this.$emit('update:pageInfo', pageInfo);
+      this.$emit('page-change', pageInfo);
     },
     // 处理当前页变化
     handleCurrentChange(val) {
-      this.currentPage = val;
-      this.$emit('pagination-change', this.pageSize,  val );
+      let pageInfo = {
+        current: val,
+        size: this.pageInfo.size,
+      };
+      this.$emit('update:pageInfo', pageInfo);
+      this.$emit('page-change', pageInfo);
+    },
+    clearSelection(){
+      this.$refs.table.clearSelection();
     }
   }
 };
 </script>
 
 <style lang="less" scoped>
-@color-primary: #007cee;
-@color-success: #13ce66;
-@color-warning: #ffba00;
-@color-danger: #ff0000;
+  @tb-border: 1px solid #dedede;
 
-.table-container {
-  &-border{
-    border: 1px solid #dedede;
-  }
-  position: relative;
-
-  .el-table {
-    width: 100%;
-    height: calc(100% - 42px);
-  }
-
-  /deep/.tableHeader th {
-    background-color: #f5f5f5;
-
-    /* 避免表头标题被外部样式设置的颜色污染 */
-    .cell {
-      color: #373838;
+  .table-container {
+    &-border {
+      border: @tb-border;
     }
-  }
 
-  /* 内置字体颜色 */
-  /deep/.el-table__row {
-    .el-table__cell .cell {
-      .success {
-        color: @color-success;
-      }
+    position: relative;
 
-      .danger {
-        color: @color-danger;
-      }
+    .table-panel {
+      height: calc(100% - 46px);
+    }
 
-      .warning {
-        color: @color-warning;
-      }
+    .el-table {
+      width: 100%;
+      // height: 100%;
+      // height: calc(100% - 42px);
+    }
 
-      .primary {
-        color: @color-primary;
+    /deep/.radio-select {
+      text-align: center;
+
+      .cell .el-radio {
+        .el-radio__inner {
+          box-shadow: none;
+        }
+
+        .el-radio__label {
+          display: none;
+        }
       }
     }
-  }
 
-  /* 表格内扩展单元 */
-  /deep/.el-table__expanded-cell {
-    padding: 12px 0;
-  }
+    /deep/.tableHeader th {
+      background-color: #f5f5f5;
 
-  /deep/ tbody tr:hover > td {
-    background-color: #f8e2ae !important;
-  }
-
-  /deep/.el-button {
-    /* 纯图标操作按钮时，加大图标 */
-    &.onlyIcon {
-      padding: 6px;
-
-      i {
-        font-size: 16px;
+      /* 避免表头标题被外部样式设置的颜色污染 */
+      .cell {
+        color: #373838;
       }
     }
-  }
+
+    /* 表格内扩展单元 */
+    /deep/.el-table__expanded-cell {
+      padding: 12px 0;
+    }
+
+    // /deep/ tbody tr:hover > td {
+    //   background-color: #f8e2ae !important;
+    // }
+
+    /deep/.el-button {
+      /* 纯图标操作按钮时，加大图标 */
+      &.onlyIcon {
+        padding: 6px;
+
+        i {
+          font-size: 16px;
+        }
+      }
+    }
+
     /* 页码 */
-  .pagination {
-    width: 100%;
-    height: 42px;
-    border: 1px solid #dedede;
-    border-top: none;
-    text-align: center;
-    line-height: 1;
-    padding-top: 4px;
+    .pagination {
+      width: 100%;
+      height: 42px;
+      border: none;
+      text-align: center;
+      line-height: 1;
+      padding-top: 4px;
+    }
+
+    &-border .pagination {
+      border: @tb-border;
+      border-top: none;
+    }
   }
-}
 </style>
